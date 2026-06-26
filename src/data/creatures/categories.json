@@ -1,0 +1,16 @@
+{
+  "version": "2024-01",
+  "categories": [
+    { "id": "fish", "label": "Fish", "pluralLabel": "Fish", "sortOrder": 1 },
+    { "id": "cephalopod", "label": "Cephalopod", "pluralLabel": "Cephalopods", "sortOrder": 2 },
+    { "id": "crustacean", "label": "Crustacean", "pluralLabel": "Crustaceans", "sortOrder": 3 },
+    { "id": "mollusk", "label": "Mollusk", "pluralLabel": "Mollusks", "sortOrder": 4 },
+    { "id": "echinoderm", "label": "Echinoderm", "pluralLabel": "Echinoderms", "sortOrder": 5 },
+    { "id": "shark_ray", "label": "Shark & Ray", "pluralLabel": "Sharks & Rays", "sortOrder": 6 },
+    { "id": "sea_turtle", "label": "Sea Turtle", "pluralLabel": "Sea Turtles", "sortOrder": 7 },
+    { "id": "marine_mammal", "label": "Marine Mammal", "pluralLabel": "Marine Mammals", "sortOrder": 8 },
+    { "id": "jellyfish", "label": "Jellyfish", "pluralLabel": "Jellyfish & Cnidarians", "sortOrder": 9 },
+    { "id": "coral_sponge", "label": "Coral & Sponge", "pluralLabel": "Corals & Sponges", "sortOrder": 10 },
+    { "id": "seagrass_algae", "label": "Seagrass & Algae", "pluralLabel": "Seagrass & Algae", "sortOrder": 11 }
+  ]
+}

@@ -2,12 +2,14 @@
   "expo": {
     "name": "medi-mon",
     "slug": "medi-mon",
+    "scheme": "medimon",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yannklein.medi-mon"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +21,11 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ]
   }
 }
