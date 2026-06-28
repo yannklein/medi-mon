@@ -61,34 +61,62 @@ This generates `ios/`/`android/` directories which break Expo Go compatibility.
 ```
 app/
   _layout.tsx               # Root layout — imports global.css, calls loadCreatures()
+  index.tsx                 # Animated splash screen — redirects to onboarding or catalog
+  onboarding.tsx            # 3-slide onboarding (sets hasOnboarded in uiStore)
   (tabs)/
-    _layout.tsx             # Tab navigator (4 tabs)
-    catalog/index.tsx       # Phase 2
-    logbook/index.tsx       # Phase 3
-    collection/index.tsx    # Phase 4
-    profile/index.tsx       # Phase 4
-  modals/                   # (declared in root Stack, presentation: 'modal')
+    _layout.tsx             # Tab navigator (4 tabs, Ionicons icons)
+    catalog/
+      _layout.tsx           # Stack with themed header
+      index.tsx             # Catalog list + search + filter
+      [id].tsx              # Creature detail screen
+    logbook/
+      _layout.tsx           # Stack with themed header
+      index.tsx             # Logbook list
+      [id].tsx              # Dive detail screen
+    collection/index.tsx    # My Ocean grid
+    profile/index.tsx       # Stats + settings (language, units)
+  modals/
+    _layout.tsx             # Modals Stack layout
+    log-dive.tsx            # 4-step dive logging modal
+    add-sighting.tsx        # Quick-add sighting modal
 
 src/
   constants/
     theme.ts                # Colors, Spacing, BorderRadius
     categories.ts           # CATEGORIES array + CATEGORY_MAP + CategoryId type
   types/
-    creature.ts             # Creature, CreatureFilter interfaces + enums
+    creature.ts             # Creature, CreatureFilter interfaces + enums (incl. gamification)
     dive.ts                 # DiveFormData, DiveRecord
     sighting.ts             # SightingFormData, SightingRecord
     global.d.ts             # declare module '*.css'
   data/
-    creatures/seed.json     # 5 sample species, version "2024-01"
+    creatures/seed.json     # 170 species, version "2024-05"
+  i18n/
+    index.ts                # useT() hook, detectLang(), Lang type
+    translations.ts         # EN (source of truth) + FR, ES, PT overrides; TRANSLATIONS registry
   services/
-    seedService.ts          # loadCreatures(), getAllCreatures(), getCreatureById()
+    seedService.ts          # loadCreatures(), getAllCreatures(), getCreatureById(), getCreatureName(creature, lang)
   stores/
     catalogFilterStore.ts   # Active filter state (Zustand + AsyncStorage, no searchQuery persist)
     diveSessionStore.ts     # In-progress 4-step dive form (Zustand + AsyncStorage)
     logbookStore.ts         # Persisted dives + sightings (Zustand + AsyncStorage)
-    uiStore.ts              # UI preferences (Zustand)
+    uiStore.ts              # UI preferences incl. language, units (Zustand)
+  components/
+    catalog/
+      CreatureCard.tsx      # List + grid card variants
+      FilterSheet.tsx       # Bottom sheet filter panel
+    logbook/
+      DiveCard.tsx          # Dive list card
+    layout/
+      WebContainer.tsx      # Max-width 680px container for wide web screens
+  hooks/
+    useResponsive.ts        # useIsWide() hook (breakpoint 768px)
   utils/
-    filterEngine.ts         # applyFilters(creatures, filter) — pure function
+    filterEngine.ts         # applyFilters(creatures, filter) — pure, searches localizedNames too
+  scripts/                  # (project root) one-off data scripts
+    add-gamification.mjs    # Derived rarity/points/specialAbility from difficulty + IUCN
+    add-localized-names.mjs # Added FR/ES/PT localizedNames to all 170 creatures
+    verify-fix-images.mjs   # Re-fetched wrong images via iNaturalist curated API
 ```
 
 ---
@@ -126,7 +154,11 @@ NativeWind custom classes: `bg-navy`, `bg-navyLight`, `text-seafoam`, `text-ocea
 ## Data Models
 
 ### Creature (`src/types/creature.ts`)
-Full interface with: id (slug), commonName, scientificName, categoryId, subcategory, primaryColors[], bodyShape, sizeCategory, sizeMin/MaxCm, depthMin/MaxM, depthZones[], habitats[], spottingDifficulty (1–5), bestSeasons[], activityPattern, spottingTips, description, behavior, diet, funFacts[], conservationStatus (IUCN), isProtected, isEndemic, tags[], thumbnailAsset, photoAssets[], illustrationAsset
+Full interface with: id (slug), commonName, scientificName, categoryId, subcategory, primaryColors[], bodyShape, sizeCategory, sizeMin/MaxCm, depthMin/MaxM, depthZones[], habitats[], spottingDifficulty (1–5), bestSeasons[], activityPattern, spottingTips, description, behavior, diet, funFacts[], conservationStatus (IUCN), isProtected, isEndemic, tags[], visualKeywords[], emoji?, wikiImageUrl?, thumbnailAsset, photoAssets[], illustrationAsset
+
+**Gamification fields:** `rarity` ('common'|'uncommon'|'rare'|'epic'|'legendary'), `points` (number), `specialAbility?` (string[])
+
+**Localization:** `localizedNames?: { fr?: string; es?: string; pt?: string }` — always use `getCreatureName(creature, lang)` from seedService for display, never read `commonName` directly in UI code.
 
 ### CreatureFilter (`src/types/creature.ts`)
 categoryId, colors[], bodyShape, sizeCategories[], depthMaxM, habitats[], spottingDifficulty, seasons[], conservationStatuses[], tags[], searchQuery
@@ -161,8 +193,13 @@ fish, cephalopod, crustacean, mollusk, echinoderm, shark_ray, sea_turtle, marine
 - `filter: CreatureFilter`, `setFilter`, `clearFilter`, `hasActiveFilters`
 - Persisted under key `'catalog-filter'` (searchQuery NOT persisted)
 
-### `useUiStore`
-- UI preferences, persisted
+### `useUIStore`
+- `language: Lang` ('en'|'fr'|'es'|'pt'), `setLanguage(lang)`
+- `showScientificNames: boolean`, `setShowScientificNames`
+- `lengthUnit: 'metric'|'imperial'`, `setLengthUnit`
+- `hasOnboarded: boolean`, `setHasOnboarded`
+- `_hasHydrated: boolean` — always guard routing logic on this
+- Persisted under key `'ui'`
 
 ---
 
@@ -171,8 +208,22 @@ fish, cephalopod, crustacean, mollusk, echinoderm, shark_ray, sea_turtle, marine
 - `tsc` binary may throw MODULE_NOT_FOUND. Use: `node node_modules/typescript/lib/tsc.js --noEmit`
 - CSS imports require `src/types/global.d.ts` (`declare module '*.css'`)
 - Tab icon `color` prop is `ColorValue` not `string` — don't pass to `style.color` string props directly
-- Never run `expo prebuild`
-- Tab icons are placeholder `<Text>` characters; replace with real icons in Phase 2
+- Never run `expo prebuild` — generates `ios/`/`android/` and breaks Expo Go compatibility
+- `moti` (MotiView) breaks Metro web bundle — use RN `Animated` API instead on web
+- `headerBackTitleVisible` is a valid NativeStack option but not in TS types — use `// @ts-ignore`
+- `outlineStyle: 'none'` (web-only) is not in RN TS types — cast as `any`
+- Never call store methods returning new objects (e.g. `getSpottedCreatureIds()`) inside Zustand selectors — causes infinite loops. Select raw data and compute with `useMemo`
+- Always import `SafeAreaView` from `react-native-safe-area-context`, not `react-native`
+- Always use `getCreatureName(creature, lang)` for display — never read `creature.commonName` directly in UI
+
+## i18n
+
+- `useT()` hook from `@/i18n` — returns `t(key, ...args)` function
+- Interpolation: `{0}`, `{1}` placeholders. Plurals: `key_one` / `key_other` suffix
+- `detectLang()` reads device locale via `Intl.DateTimeFormat().resolvedOptions().locale`
+- Language persisted in `uiStore.language`; toggled in Profile → Settings
+- `LANG_LABELS` exported from `@/i18n` for display: `{ en: '🇬🇧 English', fr: '🇫🇷 Français', … }`
+- To add a new string: add key to `EN` in `src/i18n/translations.ts`, then add translations to FR/ES/PT objects
 
 ---
 
@@ -183,6 +234,14 @@ fish, cephalopod, crustacean, mollusk, echinoderm, shark_ray, sea_turtle, marine
 ### Phase 3 — Sighting & Logbook (COMPLETE)
 ### Phase 4 — My Ocean + Polish (COMPLETE)
 ### Phase 5 — Web responsive layout (COMPLETE)
+
+### Post-Phase additions (COMPLETE)
+- **170 species** in seed.json (up from 5), with wikiImageUrl, emoji, visualKeywords
+- **Gamification**: rarity, points, specialAbility on all creatures; XP/level/badges on Profile
+- **i18n**: EN/FR/ES/PT across all UI strings; creature names localized in all 170 species
+- **Animated splash screen** (`app/index.tsx`) using RN `Animated` API
+- **EAS config**: `eas.json` (preview + production profiles), `expo-updates` wired with updates URL
+- **Image quality**: fixed wrong/unreliable photos via iNaturalist curated API script
 
 ---
 
@@ -331,7 +390,10 @@ fish, cephalopod, crustacean, mollusk, echinoderm, shark_ray, sea_turtle, marine
 ## Development Commands
 
 ```bash
-npx expo start          # Start dev server (Expo Go)
-npx expo start --web    # Web mode
-node node_modules/typescript/lib/tsc.js --noEmit  # Type check (tsc bin may be broken)
+npx expo start                                        # Start dev server (Expo Go)
+npx expo start --tunnel                               # Expo Go accessible from anywhere (no same-network required)
+npx expo start --web                                  # Web mode
+node node_modules/typescript/lib/tsc.js --noEmit     # Type check (tsc bin may be broken)
+eas update --branch main --message "..."              # Publish OTA update to Expo Go via EAS
+eas build --profile preview --platform android        # Build shareable Android APK (no Apple account needed)
 ```
