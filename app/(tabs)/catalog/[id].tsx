@@ -6,15 +6,20 @@ import {
   Pressable,
   StyleSheet,
   Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { getCreatureById } from '@/services/seedService';
+import { getCreatureById, getCreatureName } from '@/services/seedService';
 import { useLogbookStore } from '@/stores/logbookStore';
 import { CATEGORY_MAP } from '@/constants/categories';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
+import { useUIStore } from '@/stores/uiStore';
+import type { SightingRecord } from '@/types/sighting';
+import type { DiveRecord } from '@/types/dive';
 
 const IUCN_LABEL: Record<string, string> = {
   LC: 'Least Concern', NT: 'Near Threatened', VU: 'Vulnerable',
@@ -27,14 +32,38 @@ const IUCN_COLOR: Record<string, string> = {
 const SEASON_EMOJI: Record<string, string> = {
   spring: '🌸', summer: '☀️', autumn: '🍂', winter: '❄️',
 };
+const RARITY_COLOR: Record<string, string> = {
+  common: Colors.textMuted,
+  uncommon: Colors.success,
+  rare: Colors.ocean,
+  epic: '#9C27B0',
+  legendary: Colors.warning,
+};
+const RARITY_LABEL: Record<string, string> = {
+  common: 'Common',
+  uncommon: 'Uncommon',
+  rare: 'Rare',
+  epic: 'Epic',
+  legendary: 'Legendary ✦',
+};
 
 export default function CreatureDetailScreen() {
+  const t = useT();
+  const language = useUIStore((s) => s.language);
   const { id } = useLocalSearchParams<{ id: string }>();
   const creature = getCreatureById(id);
   const allSightings = useLogbookStore((s) => s.sightings);
+  const allDives = useLogbookStore((s) => s.dives);
+  const deleteSighting = useLogbookStore((s) => s.deleteSighting);
   const sightings = useMemo(
-    () => allSightings.filter((s) => s.creatureId === id),
+    () => [...allSightings.filter((s) => s.creatureId === id)].sort(
+      (a, b) => new Date(b.spottedAt).getTime() - new Date(a.spottedAt).getTime()
+    ),
     [allSightings, id]
+  );
+  const diveMap = useMemo(
+    () => new Map(allDives.map((d) => [d.id, d])),
+    [allDives]
   );
 
   if (!creature) {
@@ -42,9 +71,9 @@ export default function CreatureDetailScreen() {
       <SafeAreaView style={styles.container}>
         <Stack.Screen options={{ title: 'Not Found' }} />
         <View style={styles.notFound}>
-          <Text style={styles.notFoundText}>Species not found.</Text>
+          <Text style={styles.notFoundText}>{t('creature.notFound')}</Text>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backBtnText}>Go Back</Text>
+            <Text style={styles.backBtnText}>{t('creature.goBack')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -61,14 +90,29 @@ export default function CreatureDetailScreen() {
     router.push(`/modals/add-sighting?creatureId=${creature.id}`);
   };
 
+  const handleDeleteSighting = (sightingId: string) => {
+    Alert.alert(t('creature.sighting.deleteAlert'), t('creature.sighting.deleteMsg'), [
+      { text: t('creature.sighting.cancel'), style: 'cancel' },
+      {
+        text: t('creature.sighting.delete'),
+        style: 'destructive',
+        onPress: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          deleteSighting(sightingId);
+        },
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen
         options={{
-          title: creature.commonName,
+          title: getCreatureName(creature, language),
           headerStyle: { backgroundColor: Colors.navy },
           headerTintColor: Colors.biolumCyan,
           headerTitleStyle: { color: Colors.sandy, fontSize: 16, fontWeight: '700' },
+          // @ts-ignore — valid NativeStack option, not in TS types for this SDK version
           headerBackTitleVisible: false,
           headerShadowVisible: false,
         }}
@@ -84,11 +128,12 @@ export default function CreatureDetailScreen() {
               style={styles.heroImageGradient}
             />
             <View style={styles.heroImageOverlay}>
-              <Text style={styles.heroName}>{creature.commonName}</Text>
+              <Text style={styles.heroName}>{getCreatureName(creature, language)}</Text>
               <Text style={styles.heroSciName}>{creature.scientificName}</Text>
               <View style={styles.heroBadges}>
                 <Badge label={category?.label ?? creature.categoryId} color={catColor} />
                 <Badge label={IUCN_LABEL[creature.conservationStatus] ?? creature.conservationStatus} color={iucnColor} />
+                {creature.rarity && <Badge label={RARITY_LABEL[creature.rarity] ?? creature.rarity} color={RARITY_COLOR[creature.rarity] ?? Colors.textMuted} />}
                 {creature.isProtected && <Badge label="Protected" color={Colors.success} />}
                 {creature.isEndemic && <Badge label="Endemic" color={Colors.ocean} />}
               </View>
@@ -101,10 +146,10 @@ export default function CreatureDetailScreen() {
           >
             <View style={[styles.heroThumb, { backgroundColor: catColor + '33' }]}>
               <Text style={creature.emoji ? styles.heroEmoji : [styles.heroLetter, { color: catColor }]}>
-                {creature.emoji ?? creature.commonName[0]}
+                {creature.emoji ?? getCreatureName(creature, language)[0]}
               </Text>
             </View>
-            <Text style={styles.heroName}>{creature.commonName}</Text>
+            <Text style={styles.heroName}>{getCreatureName(creature, language)}</Text>
             <Text style={styles.heroSciName}>{creature.scientificName}</Text>
             <View style={styles.heroBadges}>
               <Badge label={category?.label ?? creature.categoryId} color={catColor} />
@@ -117,16 +162,17 @@ export default function CreatureDetailScreen() {
 
         {/* Quick stats */}
         <View style={styles.statsGrid}>
-          <StatBox label="Depth" value={`${creature.depthMinM}–${creature.depthMaxM}m`} />
-          <StatBox label="Size" value={`${creature.sizeMinCm}–${creature.sizeMaxCm}cm`} />
+          <StatBox label={t('creature.stats.depth')} value={`${creature.depthMinM}–${creature.depthMaxM}m`} />
+          <StatBox label={t('creature.stats.size')} value={`${creature.sizeMinCm}–${creature.sizeMaxCm}cm`} />
           <StatBox
-            label="Difficulty"
+            label={t('creature.stats.difficulty')}
             value={'●'.repeat(creature.spottingDifficulty) + '○'.repeat(5 - creature.spottingDifficulty)}
             valueColor={Colors.biolumCyan}
           />
           <StatBox
-            label="Activity"
-            value={creature.activityPattern === 'both' ? 'Day & Night' : creature.activityPattern}
+            label={t('creature.stats.xp')}
+            value={`${creature.points} pts`}
+            valueColor={creature.rarity ? RARITY_COLOR[creature.rarity] : undefined}
           />
         </View>
 
@@ -134,17 +180,17 @@ export default function CreatureDetailScreen() {
         <View style={styles.ctaRow}>
           <Pressable style={[styles.ctaBtn, hasBeenSpotted && styles.ctaBtnSpotted]} onPress={handleSpotted}>
             <Text style={styles.ctaBtnText}>
-              {hasBeenSpotted ? `✓ Spotted ${sightings.length}×  — Log Again` : '+ Log a Sighting'}
+              {hasBeenSpotted ? t('creature.logAgain', sightings.length) : t('creature.logSighting')}
             </Text>
           </Pressable>
         </View>
 
         {/* Sections */}
-        <Section title="Description">
+        <Section title={t('creature.sections.description')}>
           <Text style={styles.bodyText}>{creature.description}</Text>
         </Section>
 
-        <Section title="Habitats & Seasons">
+        <Section title={t('creature.sections.habitats')}>
           <View style={styles.chipRow}>
             {creature.habitats.map((h) => (
               <View key={h} style={styles.infoChip}>
@@ -161,20 +207,34 @@ export default function CreatureDetailScreen() {
           </View>
         </Section>
 
-        <Section title="Spotting Tips">
+        <Section title={t('creature.sections.tips')}>
           <Text style={[styles.bodyText, { color: Colors.seafoam }]}>{creature.spottingTips}</Text>
         </Section>
 
-        <Section title="Behavior">
+        <Section title={t('creature.sections.behavior')}>
           <Text style={styles.bodyText}>{creature.behavior}</Text>
         </Section>
 
-        <Section title="Diet">
+        <Section title={t('creature.sections.diet')}>
           <Text style={styles.bodyText}>{creature.diet}</Text>
         </Section>
 
+        {creature.specialAbility && creature.specialAbility.length > 0 && (
+          <Section title={t('creature.sections.abilities')}>
+            <View style={styles.chipRow}>
+              {creature.specialAbility.map((ab) => (
+                <View key={ab} style={[styles.abilityChip, { borderColor: creature.rarity ? RARITY_COLOR[creature.rarity] + '88' : Colors.ocean + '88' }]}>
+                  <Text style={[styles.abilityChipText, { color: creature.rarity ? RARITY_COLOR[creature.rarity] : Colors.ocean }]}>
+                    ⚡ {ab}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </Section>
+        )}
+
         {creature.funFacts.length > 0 && (
-          <Section title="Fun Facts">
+          <Section title={t('creature.sections.funFacts')}>
             {creature.funFacts.map((fact, i) => (
               <View key={i} style={styles.factRow}>
                 <Text style={styles.factBullet}>✦</Text>
@@ -185,7 +245,7 @@ export default function CreatureDetailScreen() {
         )}
 
         {creature.tags.length > 0 && (
-          <Section title="Tags">
+          <Section title={t('creature.sections.tags')}>
             <View style={styles.chipRow}>
               {creature.tags.map((t) => (
                 <View key={t} style={styles.tagChip}>
@@ -193,6 +253,53 @@ export default function CreatureDetailScreen() {
                 </View>
               ))}
             </View>
+          </Section>
+        )}
+
+        {sightings.length > 0 && (
+          <Section title={t('creature.sections.sightings', sightings.length)}>
+            {sightings.map((s) => {
+              const dive = s.diveId ? diveMap.get(s.diveId) : null;
+              const date = new Date(s.spottedAt).toLocaleDateString('en-GB', {
+                day: 'numeric', month: 'short', year: 'numeric',
+              });
+              return (
+                <View key={s.id} style={styles.sightingCard}>
+                  <View style={styles.sightingMain}>
+                    <Text style={styles.sightingDate}>{date}</Text>
+                    {dive?.locationName ? (
+                      <Text style={styles.sightingLocation}>📍 {dive.locationName}</Text>
+                    ) : null}
+                    <View style={styles.sightingMeta}>
+                      {s.depthObservedMeters != null && (
+                        <Text style={styles.sightingMetaText}>↓ {s.depthObservedMeters}m</Text>
+                      )}
+                      {s.quantity && (
+                        <Text style={styles.sightingMetaText}>× {s.quantity}</Text>
+                      )}
+                      {s.confidence && (
+                        <Text style={styles.sightingMetaText}>{s.confidence}</Text>
+                      )}
+                    </View>
+                    {s.behaviorNotes ? (
+                      <Text style={styles.sightingNotes}>{s.behaviorNotes}</Text>
+                    ) : null}
+                    {dive && (
+                      <Pressable onPress={() => router.push(`/logbook/${dive.id}`)}>
+                        <Text style={styles.sightingDiveLink}>{t('creature.sighting.viewDive')}</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  <Pressable
+                    style={styles.sightingDeleteBtn}
+                    onPress={() => handleDeleteSighting(s.id)}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.sightingDeleteText}>✕</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
           </Section>
         )}
 
@@ -412,6 +519,66 @@ const styles = StyleSheet.create({
   tagChipText: {
     color: Colors.ocean,
     fontSize: 12,
+  },
+  abilityChip: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+  },
+  abilityChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sightingCard: {
+    flexDirection: 'row',
+    backgroundColor: Colors.navyLight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginBottom: Spacing.xs,
+    alignItems: 'flex-start',
+  },
+  sightingMain: {
+    flex: 1,
+    gap: 3,
+  },
+  sightingDate: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sightingLocation: {
+    color: Colors.seafoam,
+    fontSize: 13,
+  },
+  sightingMeta: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    flexWrap: 'wrap',
+  },
+  sightingMetaText: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  sightingNotes: {
+    color: Colors.textPrimary,
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  sightingDiveLink: {
+    color: Colors.biolumCyan,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  sightingDeleteBtn: {
+    paddingLeft: Spacing.sm,
+    paddingTop: 2,
+  },
+  sightingDeleteText: {
+    color: Colors.textMuted,
+    fontSize: 16,
   },
   notFound: {
     flex: 1,

@@ -61,6 +61,18 @@ export interface Creature {
   // Tags
   tags: string[];  // "venomous" | "camouflage" | "schooling" | "invasive" | ...
 
+  // Gamification
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  points: number;
+  specialAbility?: string[];
+
+  // Visual search keywords — plain-language descriptors for feature-based search
+  // e.g. ["black dot on fin", "stripes", "suction cups", "looks like a rock"]
+  visualKeywords: string[];
+
+  // Localized common names (fallback to commonName if key absent)
+  localizedNames?: { fr?: string; es?: string; pt?: string };
+
   // Display
   emoji?: string;            // e.g. "🐙" — shown in cards & detail when no photo
 

@@ -1,4 +1,5 @@
 import type { Creature } from '@/types/creature';
+import type { Lang } from '@/i18n';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const seedData = require('@/data/creatures/seed.json') as {
@@ -33,4 +34,9 @@ export function getCatalogVersion(): string {
 
 export function getCreatureCount(): number {
   return creatureMap?.size ?? 0;
+}
+
+export function getCreatureName(creature: Creature, lang: Lang): string {
+  if (lang === 'en' || !creature.localizedNames) return creature.commonName;
+  return creature.localizedNames[lang as 'fr' | 'es' | 'pt'] ?? creature.commonName;
 }

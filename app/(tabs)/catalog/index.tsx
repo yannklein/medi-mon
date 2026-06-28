@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
   FlatList,
+  ScrollView,
   Pressable,
   StyleSheet,
   Platform,
@@ -18,17 +19,22 @@ import { CATEGORIES } from '@/constants/categories';
 import { CreatureCard } from '@/components/catalog/CreatureCard';
 import { FilterSheet } from '@/components/catalog/FilterSheet';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 import type { Creature } from '@/types/creature';
 
 const ALL_CREATURES = getAllCreatures();
 
 export default function CatalogScreen() {
+  const t = useT();
   const { filter, setFilter, clearFilter, hasActiveFilters } = useCatalogFilterStore();
   const { catalogViewMode, setCatalogViewMode } = useUIStore();
   const sightings = useLogbookStore((s) => s.sightings);
   const spottedIds = useMemo(() => new Set(sightings.map((s) => s.creatureId)), [sightings]);
 
   const [filterVisible, setFilterVisible] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  const SEARCH_HINTS = t('catalog.searchHints').split(',');
 
   const filtered = useMemo(() => applyFilters(ALL_CREATURES, filter), [filter]);
   const isGrid = catalogViewMode === 'grid';
@@ -58,16 +64,27 @@ export default function CatalogScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Page header */}
+      <View style={styles.pageHeader}>
+        <View style={styles.pageIconCircle}>
+          <Text style={styles.pageIconEmoji}>🐠</Text>
+        </View>
+        <Text style={styles.pageTitle}>{t('catalog.title')}</Text>
+        <Text style={styles.pageSubtitle}>{t('catalog.subtitle', ALL_CREATURES.length)}</Text>
+      </View>
+
       {/* Search bar */}
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search species..."
+            placeholder={t('catalog.searchPlaceholder')}
             placeholderTextColor={Colors.textMuted}
             value={filter.searchQuery ?? ''}
             onChangeText={(q) => setFilter({ searchQuery: q })}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             returnKeyType="search"
             clearButtonMode="while-editing"
           />
@@ -86,6 +103,26 @@ export default function CatalogScreen() {
           <Text style={styles.viewToggleText}>{isGrid ? '☰' : '⊞'}</Text>
         </Pressable>
       </View>
+
+      {/* Search hint chips — shown when search bar is focused and empty */}
+      {searchFocused && !filter.searchQuery && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.hintChips}
+          keyboardShouldPersistTaps="always"
+        >
+          {SEARCH_HINTS.map((hint) => (
+            <Pressable
+              key={hint}
+              style={styles.hintChip}
+              onPress={() => setFilter({ searchQuery: hint })}
+            >
+              <Text style={styles.hintChipText}>{hint}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Category chips */}
       <FlatList
@@ -119,7 +156,7 @@ export default function CatalogScreen() {
             onPress={() => setFilter({ categoryId: null })}
           >
             <Text style={[styles.catChipText, !filter.categoryId && { color: Colors.biolumCyan }]}>
-              All
+              {t('catalog.all')}
             </Text>
           </Pressable>
         }
@@ -127,10 +164,10 @@ export default function CatalogScreen() {
 
       {/* Results count */}
       <View style={styles.resultsRow}>
-        <Text style={styles.resultsText}>{filtered.length} species</Text>
+        <Text style={styles.resultsText}>{t('catalog.speciesCount', filtered.length)}</Text>
         {hasActiveFilters() && (
           <Pressable onPress={clearFilter}>
-            <Text style={styles.clearText}>Clear filters</Text>
+            <Text style={styles.clearText}>{t('catalog.clearFilters')}</Text>
           </Pressable>
         )}
       </View>
@@ -153,13 +190,14 @@ export default function CatalogScreen() {
 }
 
 function EmptyState() {
+  const t = useT();
   const { clearFilter } = useCatalogFilterStore();
   return (
     <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>No species found</Text>
-      <Text style={styles.emptySubtitle}>Try adjusting your search or filters.</Text>
+      <Text style={styles.emptyTitle}>{t('catalog.noResults.title')}</Text>
+      <Text style={styles.emptySubtitle}>{t('catalog.noResults.subtitle')}</Text>
       <Pressable style={styles.emptyBtn} onPress={clearFilter}>
-        <Text style={styles.emptyBtnText}>Clear Filters</Text>
+        <Text style={styles.emptyBtnText}>{t('catalog.noResults.btn')}</Text>
       </Pressable>
     </View>
   );
@@ -169,6 +207,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.navy,
+  },
+  pageHeader: {
+    alignItems: 'center',
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    gap: 4,
+  },
+  pageIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.navyLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    borderWidth: 2,
+    borderColor: Colors.ocean,
+  },
+  pageIconEmoji: { fontSize: 30 },
+  pageTitle: {
+    color: Colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  pageSubtitle: {
+    color: Colors.textMuted,
+    fontSize: 13,
   },
   searchRow: {
     flexDirection: 'row',
@@ -195,7 +260,8 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textPrimary,
     fontSize: 15,
-    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}),
   },
   filterBtn: {
     backgroundColor: Colors.navyLight,
@@ -229,11 +295,30 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 18,
   },
+  hintChips: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    gap: Spacing.xs,
+  },
+  hintChip: {
+    backgroundColor: Colors.ocean + '22',
+    borderWidth: 1,
+    borderColor: Colors.ocean + '66',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+  },
+  hintChipText: {
+    color: Colors.ocean,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   categoryRow: {
-    maxHeight: 46,
+    flexShrink: 0,
   },
   categoryChips: {
     paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
     gap: Spacing.xs,
     alignItems: 'center',
   },
@@ -242,7 +327,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.textMuted + '44',
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
+    paddingVertical: 7,
   },
   catChipAll: {
     borderColor: Colors.biolumCyan,

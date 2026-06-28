@@ -15,9 +15,10 @@ import { Stack, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useLogbookStore } from '@/stores/logbookStore';
 import { useDiveSessionStore } from '@/stores/diveSessionStore';
-import { getAllCreatures } from '@/services/seedService';
+import { getAllCreatures, getCreatureName } from '@/services/seedService';
 import { CATEGORY_MAP } from '@/constants/categories';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useUIStore } from '@/stores/uiStore';
 import type { DiveType } from '@/types/dive';
 import type { SightingFormData, SightingConfidence, SightingQuantity } from '@/types/sighting';
 
@@ -27,6 +28,7 @@ const ALL_CREATURES = getAllCreatures();
 type Step = 1 | 2 | 3 | 4;
 
 export default function LogDiveModal() {
+  const language = useUIStore((s) => s.language);
   const addDive = useLogbookStore((s) => s.addDive);
   const { draft, updateDraft, pendingSightings, addPendingSighting, removePendingSighting, clearSession } =
     useDiveSessionStore();
@@ -57,9 +59,11 @@ export default function LogDiveModal() {
     setDate(d);
   };
 
+  const q = creatureSearch.toLowerCase();
   const filteredCreatures = ALL_CREATURES.filter((c) =>
-    c.commonName.toLowerCase().includes(creatureSearch.toLowerCase()) ||
-    c.scientificName.toLowerCase().includes(creatureSearch.toLowerCase())
+    getCreatureName(c, language).toLowerCase().includes(q) ||
+    c.commonName.toLowerCase().includes(q) ||
+    c.scientificName.toLowerCase().includes(q)
   );
 
   const handleNext = () => {
@@ -299,13 +303,13 @@ export default function LogDiveModal() {
                   <Text style={styles.addedLabel}>Added ({pendingSightings.length})</Text>
                   {pendingSightings.map((s) => {
                     const c = ALL_CREATURES.find((cr) => cr.id === s.creatureId);
-                    const catColor = CATEGORY_MAP.get(c?.categoryId ?? '')?.color ?? Colors.ocean;
+                    const catColor = (c?.categoryId ? CATEGORY_MAP.get(c.categoryId) : undefined)?.color ?? Colors.ocean;
                     return (
                       <View key={s.creatureId} style={styles.addedRow}>
                         <View style={[styles.miniThumb, { backgroundColor: catColor + '22' }]}>
-                          <Text style={{ color: catColor, fontWeight: '700' }}>{c?.commonName[0]}</Text>
+                          <Text style={{ color: catColor, fontWeight: '700' }}>{c ? getCreatureName(c, language)[0] : '?'}</Text>
                         </View>
-                        <Text style={styles.addedName}>{c?.commonName ?? s.creatureId}</Text>
+                        <Text style={styles.addedName}>{c ? getCreatureName(c, language) : s.creatureId}</Text>
                         <Pressable onPress={() => removePendingSighting(s.creatureId)}>
                           <Text style={styles.removeText}>✕</Text>
                         </Pressable>
@@ -333,10 +337,10 @@ export default function LogDiveModal() {
                     onPress={() => toggleSighting(creature.id)}
                   >
                     <View style={[styles.miniThumb, { backgroundColor: catColor + '22' }]}>
-                      <Text style={[styles.miniLetter, { color: catColor }]}>{creature.commonName[0]}</Text>
+                      <Text style={[styles.miniLetter, { color: catColor }]}>{getCreatureName(creature, language)[0]}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.creaturePickName}>{creature.commonName}</Text>
+                      <Text style={styles.creaturePickName}>{getCreatureName(creature, language)}</Text>
                       <Text style={styles.creaturePickSci}>{creature.scientificName}</Text>
                     </View>
                     <View style={[styles.checkCircle, selected && { backgroundColor: catColor }]}>

@@ -11,6 +11,7 @@ import {
 import { useCatalogFilterStore } from '@/stores/catalogFilterStore';
 import { CATEGORIES } from '@/constants/categories';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 import type {
   CreatureColor,
   BodyShape,
@@ -45,7 +46,7 @@ const ALL_HABITATS: Habitat[] = ['rocky','sandy','posidonia','open_water','cave'
 const ALL_SEASONS: Season[] = ['spring','summer','autumn','winter'];
 const ALL_IUCN: IUCNStatus[] = ['LC','NT','VU','EN','CR','DD','NE'];
 const DEPTH_OPTIONS = [10, 20, 40, 100, 200];
-const DIFFICULTY_LABELS = ['', 'Easy', 'Moderate', 'Average', 'Hard', 'Expert'];
+const DIFFICULTY_KEYS = ['', 'easy', 'moderate', 'average', 'hard', 'expert'];
 
 interface Props {
   visible: boolean;
@@ -53,6 +54,7 @@ interface Props {
 }
 
 export function FilterSheet({ visible, onClose }: Props) {
+  const t = useT();
   const { filter, setFilter, clearFilter } = useCatalogFilterStore();
 
   function toggle<T>(arr: T[] | undefined, item: T): T[] {
@@ -73,9 +75,9 @@ export function FilterSheet({ visible, onClose }: Props) {
           {/* Header */}
           <View style={styles.header}>
             <Pressable onPress={() => { clearFilter(); }} style={styles.clearBtn}>
-              <Text style={styles.clearText}>Clear All</Text>
+              <Text style={styles.clearText}>{t('filter.clearAll')}</Text>
             </Pressable>
-            <Text style={styles.title}>Filters</Text>
+            <Text style={styles.title}>{t('filter.title')}</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeText}>✕</Text>
             </Pressable>
@@ -84,7 +86,7 @@ export function FilterSheet({ visible, onClose }: Props) {
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
             {/* Category */}
-            <Section label="Category">
+            <Section label={t('filter.category')}>
               <View style={styles.chips}>
                 {CATEGORIES.map((cat) => (
                   <Chip
@@ -99,7 +101,7 @@ export function FilterSheet({ visible, onClose }: Props) {
             </Section>
 
             {/* Colors */}
-            <Section label="Color">
+            <Section label={t('filter.color')}>
               <View style={styles.colorRow}>
                 {ALL_COLORS.map((color) => {
                   const active = filter.colors?.includes(color) ?? false;
@@ -121,7 +123,7 @@ export function FilterSheet({ visible, onClose }: Props) {
             </Section>
 
             {/* Body Shape */}
-            <Section label="Body Shape">
+            <Section label={t('filter.shape')}>
               <View style={styles.chips}>
                 {ALL_SHAPES.map((shape) => (
                   <Chip
@@ -135,7 +137,7 @@ export function FilterSheet({ visible, onClose }: Props) {
             </Section>
 
             {/* Size */}
-            <Section label="Size">
+            <Section label={t('filter.size')}>
               <View style={styles.chips}>
                 {ALL_SIZES.map((size) => (
                   <Chip
@@ -149,7 +151,7 @@ export function FilterSheet({ visible, onClose }: Props) {
             </Section>
 
             {/* Max Depth */}
-            <Section label="Max Depth (Accessible at)">
+            <Section label={t('filter.depth')}>
               <View style={styles.chips}>
                 {DEPTH_OPTIONS.map((depth) => (
                   <Chip
@@ -163,7 +165,7 @@ export function FilterSheet({ visible, onClose }: Props) {
             </Section>
 
             {/* Habitat */}
-            <Section label="Habitat">
+            <Section label={t('filter.habitat')}>
               <View style={styles.chips}>
                 {ALL_HABITATS.map((h) => (
                   <Chip
@@ -177,12 +179,12 @@ export function FilterSheet({ visible, onClose }: Props) {
             </Section>
 
             {/* Spotting Difficulty */}
-            <Section label="Spotting Difficulty (up to)">
+            <Section label={t('filter.difficulty')}>
               <View style={styles.chips}>
                 {([1,2,3,4,5] as SpottingDifficulty[]).map((d) => (
                   <Chip
                     key={d}
-                    label={DIFFICULTY_LABELS[d]}
+                    label={t(`filter.difficulty.${DIFFICULTY_KEYS[d]}`)}
                     active={filter.spottingDifficulty === d}
                     onPress={() => setFilter({ spottingDifficulty: filter.spottingDifficulty === d ? null : d })}
                   />
@@ -191,7 +193,7 @@ export function FilterSheet({ visible, onClose }: Props) {
             </Section>
 
             {/* Season */}
-            <Section label="Best Season">
+            <Section label={t('filter.season')}>
               <View style={styles.chips}>
                 {ALL_SEASONS.map((s) => (
                   <Chip
@@ -205,7 +207,7 @@ export function FilterSheet({ visible, onClose }: Props) {
             </Section>
 
             {/* Conservation Status */}
-            <Section label="Conservation Status">
+            <Section label={t('filter.conservation')}>
               <View style={styles.chips}>
                 {ALL_IUCN.map((status) => (
                   <Chip
@@ -224,7 +226,7 @@ export function FilterSheet({ visible, onClose }: Props) {
           {/* Footer */}
           <View style={styles.footer}>
             <Pressable style={styles.applyBtn} onPress={onClose}>
-              <Text style={styles.applyText}>Apply Filters</Text>
+              <Text style={styles.applyText}>{t('filter.apply')}</Text>
             </Pressable>
           </View>
         </SafeAreaView>

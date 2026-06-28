@@ -11,15 +11,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useLogbookStore } from '@/stores/logbookStore';
-import { getCreatureById } from '@/services/seedService';
+import { getCreatureById, getCreatureName } from '@/services/seedService';
 import { CATEGORY_MAP } from '@/constants/categories';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useUIStore } from '@/stores/uiStore';
 
 const DIVE_TYPE_LABEL: Record<string, string> = {
   scuba: 'SCUBA', freedive: 'Freedive', snorkel: 'Snorkel',
 };
 
 export default function DiveDetailScreen() {
+  const language = useUIStore((s) => s.language);
   const { id } = useLocalSearchParams<{ id: string }>();
   const dive = useLogbookStore((s) => s.dives.find((d) => d.id === id));
   const allSightings = useLogbookStore((s) => s.sightings);
@@ -142,12 +144,12 @@ export default function DiveDetailScreen() {
                 <View key={sighting.id} style={styles.sightingRow}>
                   <View style={[styles.sightingThumb, { backgroundColor: catColor + '22' }]}>
                     <Text style={[styles.sightingLetter, { color: catColor }]}>
-                      {creature?.commonName[0] ?? '?'}
+                      {creature ? getCreatureName(creature, language)[0] : '?'}
                     </Text>
                   </View>
                   <View style={styles.sightingInfo}>
                     <Text style={styles.sightingName}>
-                      {creature?.commonName ?? sighting.creatureId}
+                      {creature ? getCreatureName(creature, language) : sighting.creatureId}
                     </Text>
                     <Text style={styles.sightingMeta}>
                       {[

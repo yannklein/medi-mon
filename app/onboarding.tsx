@@ -12,37 +12,24 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useUIStore } from '@/stores/uiStore';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 
 // const { width } = Dimensions.get('window');
 
-const SLIDES = [
-  {
-    emoji: '🐙',
-    title: 'Discover the Mediterranean',
-    body: 'Browse a catalog of marine species found in the Mediterranean Sea — from octopus to sea turtles.',
-    color: Colors.ocean,
-  },
-  {
-    emoji: '🤿',
-    title: 'Log Every Dive',
-    body: 'Record your dives with depth, conditions, and all the creatures you encountered.',
-    color: '#7B2FBE',
-  },
-  {
-    emoji: '🌊',
-    title: 'Build Your Ocean',
-    body: "Track which species you've spotted and grow your personal field guide over time.",
-    color: '#00897B',
-  },
+const SLIDE_META = [
+  { emoji: '🐙', color: Colors.ocean },
+  { emoji: '🤿', color: '#7B2FBE' },
+  { emoji: '🌊', color: '#00897B' },
 ];
 
 export default function OnboardingScreen() {
+  const t = useT();
   const [slide, setSlide] = useState(0);
   const setHasOnboarded = useUIStore((s) => s.setHasOnboarded);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const isLast = slide === SLIDES.length - 1;
-  const current = SLIDES[slide];
+  const isLast = slide === SLIDE_META.length - 1;
+  const current = SLIDE_META[slide];
 
   useEffect(() => {
     fadeAnim.setValue(0);
@@ -68,13 +55,13 @@ export default function OnboardingScreen() {
 
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         <Text style={styles.emoji}>{current.emoji}</Text>
-        <Text style={styles.title}>{current.title}</Text>
-        <Text style={styles.body}>{current.body}</Text>
+        <Text style={styles.title}>{t(`onboarding.${slide}.title`)}</Text>
+        <Text style={styles.body}>{t(`onboarding.${slide}.body`)}</Text>
       </Animated.View>
 
       {/* Dots */}
       <View style={styles.dots}>
-        {SLIDES.map((_, i) => (
+        {SLIDE_META.map((_, i) => (
           <View
             key={i}
             style={[styles.dot, i === slide && styles.dotActive]}
@@ -85,11 +72,11 @@ export default function OnboardingScreen() {
       {/* CTA */}
       <View style={styles.footer}>
         <Pressable style={styles.nextBtn} onPress={handleNext}>
-          <Text style={styles.nextText}>{isLast ? 'Get Started →' : 'Next →'}</Text>
+          <Text style={styles.nextText}>{isLast ? t('onboarding.getStarted') : t('onboarding.next')}</Text>
         </Pressable>
         {!isLast && (
           <Pressable onPress={() => { setHasOnboarded(true); router.replace('/(tabs)/catalog'); }}>
-            <Text style={styles.skipText}>Skip</Text>
+            <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
           </Pressable>
         )}
       </View>

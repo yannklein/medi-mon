@@ -14,9 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useLogbookStore } from '@/stores/logbookStore';
-import { getAllCreatures, getCreatureById } from '@/services/seedService';
+import { getAllCreatures, getCreatureById, getCreatureName } from '@/services/seedService';
 import { CATEGORY_MAP } from '@/constants/categories';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
+import { useUIStore } from '@/stores/uiStore';
 import type { SightingConfidence, SightingQuantity } from '@/types/sighting';
 
 const ALL_CREATURES = getAllCreatures();
@@ -24,12 +26,22 @@ const CONFIDENCE_OPTIONS: SightingConfidence[] = ['certain', 'probable', 'unsure
 const QUANTITY_OPTIONS: SightingQuantity[] = ['one', 'few', 'many'];
 
 export default function AddSightingModal() {
+  const t = useT();
+  const language = useUIStore((s) => s.language);
   const params = useLocalSearchParams<{ creatureId?: string; diveId?: string }>();
   const addSighting = useLogbookStore((s) => s.addSighting);
+  const dives = useLogbookStore((s) => s.dives);
+
+  const sortedDives = useMemo(
+    () => [...dives].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [dives]
+  );
 
   const [selectedCreatureId, setSelectedCreatureId] = useState<string | null>(
     params.creatureId ?? null
   );
+  const [selectedDiveId, setSelectedDiveId] = useState<string | null>(params.diveId ?? null);
+  const [divePickerOpen, setDivePickerOpen] = useState(false);
   const [creatureSearch, setCreatureSearch] = useState('');
   const [depth, setDepth] = useState('');
   const [quantity, setQuantity] = useState<SightingQuantity>('one');
@@ -41,22 +53,25 @@ export default function AddSightingModal() {
     ? CATEGORY_MAP.get(selectedCreature.categoryId)?.color ?? Colors.ocean
     : Colors.ocean;
 
-  const filteredCreatures = useMemo(() =>
-    ALL_CREATURES.filter((c) =>
-      c.commonName.toLowerCase().includes(creatureSearch.toLowerCase()) ||
-      c.scientificName.toLowerCase().includes(creatureSearch.toLowerCase())
-    ),
-    [creatureSearch]
-  );
+  const filteredCreatures = useMemo(() => {
+    const q = creatureSearch.toLowerCase();
+    return ALL_CREATURES.filter((c) =>
+      getCreatureName(c, language).toLowerCase().includes(q) ||
+      c.commonName.toLowerCase().includes(q) ||
+      c.scientificName.toLowerCase().includes(q)
+    );
+  }, [creatureSearch, language]);
+
+  const selectedDive = selectedDiveId ? sortedDives.find((d) => d.id === selectedDiveId) : null;
 
   const handleSave = () => {
     if (!selectedCreatureId) {
-      Alert.alert('Select a Species', 'Please select a species before saving.');
+      Alert.alert(t('sighting.alertTitle'), t('sighting.alertMsg'));
       return;
     }
     addSighting({
       creatureId: selectedCreatureId,
-      diveId: params.diveId ?? null,
+      diveId: selectedDiveId ?? null,
       spottedAt: new Date(),
       depthObservedMeters: depth ? parseFloat(depth) : null,
       quantity,
@@ -72,15 +87,15 @@ export default function AddSightingModal() {
     <SafeAreaView style={styles.container}>
       <Stack.Screen
         options={{
-          title: 'Log a Sighting',
+          title: t('sighting.title'),
           headerLeft: () => (
             <Pressable onPress={() => router.back()} style={{ paddingLeft: 4 }}>
-              <Text style={{ color: Colors.coral, fontSize: 16 }}>Cancel</Text>
+              <Text style={{ color: Colors.coral, fontSize: 16 }}>{t('sighting.cancel')}</Text>
             </Pressable>
           ),
           headerRight: () => (
             <Pressable onPress={handleSave} style={{ paddingRight: 4 }}>
-              <Text style={{ color: Colors.biolumCyan, fontSize: 16, fontWeight: '700' }}>Save</Text>
+              <Text style={{ color: Colors.biolumCyan, fontSize: 16, fontWeight: '700' }}>{t('sighting.save')}</Text>
             </Pressable>
           ),
         }}
@@ -93,22 +108,22 @@ export default function AddSightingModal() {
           {selectedCreature ? (
             <View style={[styles.selectedCard, { borderColor: catColor }]}>
               <View style={[styles.thumbCircle, { backgroundColor: catColor + '22' }]}>
-                <Text style={[styles.thumbLetter, { color: catColor }]}>{selectedCreature.commonName[0]}</Text>
+                <Text style={[styles.thumbLetter, { color: catColor }]}>{getCreatureName(selectedCreature, language)[0]}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.selectedName}>{selectedCreature.commonName}</Text>
+                <Text style={styles.selectedName}>{getCreatureName(selectedCreature, language)}</Text>
                 <Text style={styles.selectedSci}>{selectedCreature.scientificName}</Text>
               </View>
               <Pressable onPress={() => setSelectedCreatureId(null)}>
-                <Text style={styles.changeText}>Change</Text>
+                <Text style={styles.changeText}>{t('sighting.change')}</Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Select Species *</Text>
+              <Text style={styles.sectionTitle}>{t('sighting.selectSpecies')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Search species..."
+                placeholder={t('sighting.searchPlaceholder')}
                 placeholderTextColor={Colors.textMuted}
                 value={creatureSearch}
                 onChangeText={setCreatureSearch}
@@ -125,10 +140,10 @@ export default function AddSightingModal() {
                     }}
                   >
                     <View style={[styles.miniThumb, { backgroundColor: color + '22' }]}>
-                      <Text style={[styles.miniLetter, { color }]}>{c.commonName[0]}</Text>
+                      <Text style={[styles.miniLetter, { color }]}>{getCreatureName(c, language)[0]}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.creatureName}>{c.commonName}</Text>
+                      <Text style={styles.creatureName}>{getCreatureName(c, language)}</Text>
                       <Text style={styles.creatureSci}>{c.scientificName}</Text>
                     </View>
                   </Pressable>
@@ -137,11 +152,66 @@ export default function AddSightingModal() {
             </View>
           )}
 
+          {/* Dive Picker — hidden when diveId was passed in as param */}
+          {!params.diveId && selectedCreature && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('sighting.linkDive')}</Text>
+              {selectedDive ? (
+                <View style={styles.diveSelectedRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.diveSelectedDate}>
+                      {new Date(selectedDive.date).toLocaleDateString('en-GB', {
+                        day: 'numeric', month: 'short', year: 'numeric',
+                      })}
+                    </Text>
+                    <Text style={styles.diveSelectedLoc} numberOfLines={1}>
+                      {selectedDive.locationName || 'Unknown location'}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setSelectedDiveId(null)}>
+                    <Text style={styles.changeText}>{t('sighting.removeDive')}</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <Pressable
+                    style={styles.divePickerBtn}
+                    onPress={() => setDivePickerOpen((v) => !v)}
+                  >
+                    <Text style={styles.divePickerBtnText}>
+                      {divePickerOpen ? t('sighting.closePicker') : sortedDives.length === 0 ? t('sighting.noDives') : t('sighting.selectDive')}
+                    </Text>
+                  </Pressable>
+                  {divePickerOpen && sortedDives.map((d) => (
+                    <Pressable
+                      key={d.id}
+                      style={styles.diveRow}
+                      onPress={() => {
+                        setSelectedDiveId(d.id);
+                        setDivePickerOpen(false);
+                        Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text style={styles.diveRowDate}>
+                        {new Date(d.date).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })}
+                      </Text>
+                      <Text style={styles.diveRowLoc} numberOfLines={1}>
+                        {d.locationName || 'Unknown location'} · {d.maxDepthMeters}m
+                      </Text>
+                    </Pressable>
+                  ))}
+                </>
+              )}
+            </View>
+          )}
+
           {selectedCreature && (
             <>
               {/* Confidence */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>How sure are you?</Text>
+                <Text style={styles.sectionTitle}>{t('sighting.confidence')}</Text>
                 <View style={styles.optionRow}>
                   {CONFIDENCE_OPTIONS.map((c) => (
                     <Pressable
@@ -150,7 +220,7 @@ export default function AddSightingModal() {
                       onPress={() => setConfidence(c)}
                     >
                       <Text style={[styles.optionText, confidence === c && styles.optionTextActive]}>
-                        {c}
+                        {t(`sighting.${c}`)}
                       </Text>
                     </Pressable>
                   ))}
@@ -159,7 +229,7 @@ export default function AddSightingModal() {
 
               {/* Quantity */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>How many?</Text>
+                <Text style={styles.sectionTitle}>{t('sighting.quantity')}</Text>
                 <View style={styles.optionRow}>
                   {QUANTITY_OPTIONS.map((q) => (
                     <Pressable
@@ -168,7 +238,7 @@ export default function AddSightingModal() {
                       onPress={() => setQuantity(q)}
                     >
                       <Text style={[styles.optionText, quantity === q && styles.optionTextActive]}>
-                        {q}
+                        {t(`sighting.${q}`)}
                       </Text>
                     </Pressable>
                   ))}
@@ -177,10 +247,10 @@ export default function AddSightingModal() {
 
               {/* Depth */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Depth Observed (m)</Text>
+                <Text style={styles.sectionTitle}>{t('sighting.depth')}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. 12"
+                  placeholder={t('sighting.depthPlaceholder')}
                   placeholderTextColor={Colors.textMuted}
                   value={depth}
                   onChangeText={setDepth}
@@ -190,10 +260,10 @@ export default function AddSightingModal() {
 
               {/* Notes */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Behavior Notes</Text>
+                <Text style={styles.sectionTitle}>{t('sighting.notes')}</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
-                  placeholder="What was it doing? Any interesting behavior?"
+                  placeholder={t('sighting.notesPlaceholder')}
                   placeholderTextColor={Colors.textMuted}
                   value={behaviorNotes}
                   onChangeText={setBehaviorNotes}
@@ -204,7 +274,7 @@ export default function AddSightingModal() {
               </View>
 
               <Pressable style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>Save Sighting ✓</Text>
+                <Text style={styles.saveBtnText}>{t('sighting.saveBtn')}</Text>
               </Pressable>
             </>
           )}
@@ -307,4 +377,37 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   saveBtnText: { color: Colors.white, fontSize: 16, fontWeight: '700' },
+  divePickerBtn: {
+    backgroundColor: Colors.navyLight,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.ocean + '33',
+  },
+  divePickerBtnText: { color: Colors.textMuted, fontSize: 14 },
+  diveRow: {
+    backgroundColor: Colors.navyLight,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.ocean + '22',
+  },
+  diveRowDate: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  diveRowLoc: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
+  diveSelectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.ocean + '22',
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.ocean,
+    gap: Spacing.sm,
+  },
+  diveSelectedDate: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  diveSelectedLoc: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
 });

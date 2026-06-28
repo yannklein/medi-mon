@@ -11,19 +11,57 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useLogbookStore } from '@/stores/logbookStore';
 import { useUIStore } from '@/stores/uiStore';
-import { getAllCreatures, getCreatureById } from '@/services/seedService';
+import { getAllCreatures, getCreatureById, getCreatureName } from '@/services/seedService';
 import { DiveCard } from '@/components/logbook/DiveCard';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useT, LANG_LABELS, type Lang } from '@/i18n';
+
+// ─── Level system ────────────────────────────────────────────────────────────
+const LEVELS = [
+  { level: 1, xpNeeded: 0 },
+  { level: 2, xpNeeded: 100 },
+  { level: 3, xpNeeded: 300 },
+  { level: 4, xpNeeded: 700 },
+  { level: 5, xpNeeded: 1500 },
+  { level: 6, xpNeeded: 3000 },
+  { level: 7, xpNeeded: 6000 },
+  { level: 8, xpNeeded: 12000 },
+];
+
+function getLevelInfo(xp: number) {
+  let current = LEVELS[0];
+  let next = LEVELS[1];
+  for (let i = 0; i < LEVELS.length; i++) {
+    if (xp >= LEVELS[i].xpNeeded) {
+      current = LEVELS[i];
+      next = LEVELS[i + 1] ?? null;
+    }
+  }
+  const xpIntoLevel = next ? xp - current.xpNeeded : 0;
+  const xpForNext = next ? next.xpNeeded - current.xpNeeded : 1;
+  const progress = next ? Math.min(1, xpIntoLevel / xpForNext) : 1;
+  return { current, next, progress, xpIntoLevel, xpForNext };
+}
+
+// ─── Badge definitions ───────────────────────────────────────────────────────
+const BADGE_EMOJIS: Record<string, string> = {
+  first_sighting: '👁️', first_dive: '🤿', explorer_10: '🗺️', explorer_25: '🔭',
+  explorer_50: '📚', explorer_100: '🏆', shark_watcher: '🦈', turtle_saver: '🐢',
+  octopus: '🐙', deep_diver: '🌊', rare_find: '💎', epic_find: '🌟',
+  legendary_find: '👑', diver_10: '📓', night_spotter: '🌙',
+};
+const BADGE_IDS = Object.keys(BADGE_EMOJIS);
 
 const ALL_CREATURES = getAllCreatures();
 
 export default function ProfileScreen() {
+  const t = useT();
   const dives = useLogbookStore((s) => s.dives);
   const sightings = useLogbookStore((s) => s.sightings);
   const getSightingsForDive = useLogbookStore((s) => s.getSightingsForDive);
   const spottedIds = useMemo(() => new Set(sightings.map((s) => s.creatureId)), [sightings]);
 
-  const { showScientificNames, setShowScientificNames, lengthUnit, setLengthUnit } = useUIStore();
+  const { showScientificNames, setShowScientificNames, lengthUnit, setLengthUnit, language, setLanguage } = useUIStore();
 
   const stats = useMemo(() => {
     const totalMinutes = dives.reduce((sum, d) => sum + d.durationMinutes, 0);
@@ -42,6 +80,43 @@ export default function ProfileScreen() {
     return { totalHours, totalMins, deepest, topCreature, topCount: topId ? counts[topId] : 0 };
   }, [dives, sightings]);
 
+  // ─── XP ────────────────────────────────────────────────────────────────────
+  const totalXP = useMemo(() => {
+    return sightings.reduce((sum, s) => {
+      const c = getCreatureById(s.creatureId);
+      return sum + (c?.points ?? 0);
+    }, 0);
+  }, [sightings]);
+  const levelInfo = getLevelInfo(totalXP);
+
+  // ─── Badges ────────────────────────────────────────────────────────────────
+  const earnedBadgeIds = useMemo(() => {
+    const earned = new Set<string>();
+    if (sightings.length > 0) earned.add('first_sighting');
+    if (dives.length > 0) earned.add('first_dive');
+    if (dives.length >= 10) earned.add('diver_10');
+    if (spottedIds.size >= 10) earned.add('explorer_10');
+    if (spottedIds.size >= 25) earned.add('explorer_25');
+    if (spottedIds.size >= 50) earned.add('explorer_50');
+    if (spottedIds.size >= 100) earned.add('explorer_100');
+
+    let nocturnalCount = 0;
+    for (const s of sightings) {
+      const c = getCreatureById(s.creatureId);
+      if (!c) continue;
+      if (c.categoryId === 'shark_ray') earned.add('shark_watcher');
+      if (c.categoryId === 'sea_turtle') earned.add('turtle_saver');
+      if (c.categoryId === 'cephalopod') earned.add('octopus');
+      if (c.rarity === 'rare' || c.rarity === 'epic' || c.rarity === 'legendary') earned.add('rare_find');
+      if (c.rarity === 'epic' || c.rarity === 'legendary') earned.add('epic_find');
+      if (c.rarity === 'legendary') earned.add('legendary_find');
+      if (s.depthObservedMeters != null && s.depthObservedMeters >= 30) earned.add('deep_diver');
+      if (c.activityPattern === 'nocturnal') nocturnalCount++;
+    }
+    if (nocturnalCount >= 5) earned.add('night_spotter');
+    return earned;
+  }, [sightings, dives, spottedIds]);
+
   const recentDives = [...dives]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 3);
@@ -54,33 +129,82 @@ export default function ProfileScreen() {
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarText}>🤿</Text>
           </View>
-          <Text style={styles.title}>Diver Profile</Text>
-          <Text style={styles.subtitle}>Mediterranean Explorer</Text>
+          <Text style={styles.title}>{t('profile.title')}</Text>
+          <Text style={styles.subtitle}>{t('profile.subtitle')}</Text>
         </View>
 
         {/* Stats */}
         <View style={styles.statsGrid}>
-          <StatBox label="Total Dives" value={String(dives.length)} />
+          <StatBox label={t('profile.stats.dives')} value={String(dives.length)} />
           <StatBox
-            label="Bottom Time"
+            label={t('profile.stats.time')}
             value={dives.length ? `${stats.totalHours}h ${stats.totalMins}m` : '—'}
           />
           <StatBox
-            label="Deepest Dive"
+            label={t('profile.stats.depth')}
             value={stats.deepest > 0 ? `${stats.deepest}m` : '—'}
           />
           <StatBox
-            label="Species Found"
+            label={t('profile.stats.species')}
             value={`${spottedIds.size}/${ALL_CREATURES.length}`}
             accent
           />
         </View>
 
+        {/* XP / Level */}
+        <View style={styles.levelCard}>
+          <View style={styles.levelRow}>
+            <View style={styles.levelBadgeCircle}>
+              <Text style={styles.levelBadgeNum}>{levelInfo.current.level}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.levelTitle}>{t(`level.${levelInfo.current.level}`)}</Text>
+              <Text style={styles.levelXP}>
+                {levelInfo.next
+                  ? t('profile.xp.toNext', totalXP, levelInfo.xpForNext - levelInfo.xpIntoLevel)
+                  : t('profile.xp.max', totalXP)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.xpBarBg}>
+            <View style={[styles.xpBarFill, { width: `${Math.round(levelInfo.progress * 100)}%` as any }]} />
+          </View>
+          {levelInfo.next && (
+            <Text style={styles.xpBarLabel}>
+              {t('profile.xp.bar', levelInfo.xpIntoLevel, levelInfo.xpForNext, t(`level.${levelInfo.next.level}`))}
+            </Text>
+          )}
+        </View>
+
+        {/* Badges */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>
+              {t('profile.badges.title')} — {earnedBadgeIds.size}/{BADGE_IDS.length}
+            </Text>
+          </View>
+          <View style={styles.badgeGrid}>
+            {BADGE_IDS.map((id) => {
+              const earned = earnedBadgeIds.has(id);
+              return (
+                <View key={id} style={[styles.badgeItem, !earned && styles.badgeItemLocked]}>
+                  <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiLocked]}>
+                    {earned ? BADGE_EMOJIS[id] : '🔒'}
+                  </Text>
+                  <Text style={[styles.badgeTitle, !earned && styles.badgeTitleLocked]} numberOfLines={2}>
+                    {t(`badge.${id}.title`)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
         {stats.topCreature && (
           <View style={styles.topCreatureCard}>
-            <Text style={styles.topCreatureLabel}>Most Spotted</Text>
-            <Text style={styles.topCreatureName}>{stats.topCreature.commonName}</Text>
-            <Text style={styles.topCreatureCount}>{stats.topCount}× sightings</Text>
+            <Text style={styles.topCreatureLabel}>{t('profile.mostSpotted.label')}</Text>
+            <Text style={styles.topCreatureName}>{getCreatureName(stats.topCreature, language)}</Text>
+            <Text style={styles.topCreatureCount}>{t('profile.mostSpotted.count', stats.topCount)}</Text>
           </View>
         )}
 
@@ -88,9 +212,9 @@ export default function ProfileScreen() {
         {recentDives.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Recent Dives</Text>
+              <Text style={styles.sectionTitle}>{t('profile.recentDives.title')}</Text>
               <Pressable onPress={() => router.push('/logbook')}>
-                <Text style={styles.seeAllText}>See all →</Text>
+                <Text style={styles.seeAllText}>{t('profile.recentDives.seeAll')}</Text>
               </Pressable>
             </View>
             {recentDives.map((dive) => (
@@ -105,11 +229,13 @@ export default function ProfileScreen() {
 
         {/* Settings */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Settings</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>{t('profile.settings.title')}</Text>
+          </View>
           <View style={styles.settingsCard}>
             <SettingRow
-              label="Show Scientific Names"
-              description="Display Latin names in catalog"
+              label={t('profile.settings.showSci')}
+              description={t('profile.settings.showSciDesc')}
             >
               <Switch
                 value={showScientificNames}
@@ -120,25 +246,44 @@ export default function ProfileScreen() {
             </SettingRow>
             <View style={styles.settingDivider} />
             <SettingRow
-              label="Units"
-              description={`Currently: ${lengthUnit}`}
+              label={t('profile.settings.units')}
+              description={lengthUnit === 'metric' ? t('profile.settings.metric') : t('profile.settings.imperial')}
             >
               <Pressable
                 style={styles.unitToggle}
                 onPress={() => setLengthUnit(lengthUnit === 'metric' ? 'imperial' : 'metric')}
               >
                 <Text style={styles.unitToggleText}>
-                  {lengthUnit === 'metric' ? 'Metric' : 'Imperial'}
+                  {lengthUnit === 'metric' ? t('profile.settings.metric') : t('profile.settings.imperial')}
                 </Text>
               </Pressable>
+            </SettingRow>
+            <View style={styles.settingDivider} />
+            <SettingRow
+              label={t('profile.settings.language')}
+              description={t('profile.settings.languageDesc')}
+            >
+              <View style={styles.langRow}>
+                {(['en', 'fr', 'es', 'pt'] as Lang[]).map((lang) => (
+                  <Pressable
+                    key={lang}
+                    style={[styles.langBtn, language === lang && styles.langBtnActive]}
+                    onPress={() => setLanguage(lang)}
+                  >
+                    <Text style={[styles.langBtnText, language === lang && styles.langBtnTextActive]}>
+                      {lang.toUpperCase()}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             </SettingRow>
           </View>
         </View>
 
         {/* App info */}
         <View style={styles.appInfo}>
-          <Text style={styles.appInfoText}>MediMon v1.0.0</Text>
-          <Text style={styles.appInfoText}>{ALL_CREATURES.length} species in catalog</Text>
+          <Text style={styles.appInfoText}>{t('profile.appInfo')}</Text>
+          <Text style={styles.appInfoText}>{t('profile.appInfo.species', ALL_CREATURES.length)}</Text>
         </View>
 
         <View style={{ height: Spacing.xxl }} />
@@ -229,6 +374,81 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 12,
   },
+  levelCard: {
+    marginHorizontal: Spacing.md,
+    backgroundColor: Colors.navyLight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.biolumCyan + '44',
+  },
+  levelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  levelBadgeCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.biolumCyan + '22',
+    borderWidth: 2,
+    borderColor: Colors.biolumCyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelBadgeNum: { color: Colors.biolumCyan, fontSize: 18, fontWeight: '800' },
+  levelTitle: { color: Colors.textPrimary, fontSize: 16, fontWeight: '700' },
+  levelXP: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
+  xpBarBg: {
+    height: 8,
+    backgroundColor: Colors.navyDark,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  xpBarFill: {
+    height: 8,
+    backgroundColor: Colors.biolumCyan,
+    borderRadius: 4,
+  },
+  xpBarLabel: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
+    textAlign: 'right',
+  },
+  badgeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.xs,
+  },
+  badgeItem: {
+    width: '22%',
+    backgroundColor: Colors.navyLight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.xs,
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: Colors.biolumCyan + '44',
+  },
+  badgeItemLocked: {
+    borderColor: 'transparent',
+    opacity: 0.4,
+  },
+  badgeEmoji: { fontSize: 24 },
+  badgeEmojiLocked: { fontSize: 20 },
+  badgeTitle: {
+    color: Colors.textPrimary,
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+  badgeTitleLocked: { color: Colors.textMuted },
   topCreatureCard: {
     marginHorizontal: Spacing.md,
     backgroundColor: Colors.ocean + '22',
@@ -292,6 +512,20 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   unitToggleText: { color: Colors.ocean, fontSize: 13, fontWeight: '600' },
+  langRow: { flexDirection: 'row', gap: 4 },
+  langBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.textMuted + '44',
+  },
+  langBtnActive: {
+    backgroundColor: Colors.biolumCyan + '22',
+    borderColor: Colors.biolumCyan,
+  },
+  langBtnText: { color: Colors.textMuted, fontSize: 12, fontWeight: '700' },
+  langBtnTextActive: { color: Colors.biolumCyan },
   appInfo: {
     alignItems: 'center',
     gap: 4,

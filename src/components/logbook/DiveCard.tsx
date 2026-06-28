@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import type { DiveRecord } from '@/types/dive';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 
 const DIVE_TYPE_LABEL: Record<string, string> = {
   scuba: 'SCUBA',
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function DiveCard({ dive, sightingCount }: Props) {
+  const t = useT();
   const date = new Date(dive.date);
   const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   const typeColor = DIVE_TYPE_COLOR[dive.diveType] ?? Colors.ocean;
@@ -48,15 +50,15 @@ export function DiveCard({ dive, sightingCount }: Props) {
 
         {/* Row 2: Location */}
         <Text style={styles.location} numberOfLines={1}>
-          {dive.locationName || 'Unknown Location'}
+          {dive.locationName || t('dive.unknownLocation')}
         </Text>
 
         {/* Row 3: Stats */}
         <View style={styles.statsRow}>
-          <Stat label="Depth" value={`${dive.maxDepthMeters}m`} />
-          <Stat label="Time" value={`${dive.durationMinutes}min`} />
+          <Stat label={t('dive.stats.depth')} value={`${dive.maxDepthMeters}m`} />
+          <Stat label={t('dive.stats.time')} value={`${dive.durationMinutes}min`} />
           {sightingCount > 0 && (
-            <Stat label="Sightings" value={String(sightingCount)} accent />
+            <Stat label={t('dive.stats.sightings')} value={String(sightingCount)} accent />
           )}
           {dive.rating != null && (
             <Text style={styles.stars}>{'★'.repeat(dive.rating)}{'☆'.repeat(5 - dive.rating)}</Text>

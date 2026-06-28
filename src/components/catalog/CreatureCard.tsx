@@ -4,11 +4,20 @@ import { router } from 'expo-router';
 import type { Creature } from '@/types/creature';
 import { CATEGORY_MAP } from '@/constants/categories';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useUIStore } from '@/stores/uiStore';
+import { getCreatureName } from '@/services/seedService';
 
 const IUCN_THREAT_COLORS: Record<string, string> = {
   VU: Colors.warning,
   EN: Colors.coral,
   CR: Colors.error,
+};
+const RARITY_COLOR: Record<string, string> = {
+  common: Colors.textMuted,
+  uncommon: Colors.success,
+  rare: Colors.ocean,
+  epic: '#9C27B0',
+  legendary: Colors.warning,
 };
 
 interface Props {
@@ -18,6 +27,8 @@ interface Props {
 }
 
 export function CreatureCard({ creature, compact = false, spotted = false }: Props) {
+  const language = useUIStore((s) => s.language);
+  const name = getCreatureName(creature, language);
   const category = CATEGORY_MAP.get(creature.categoryId);
   const catColor = category?.color ?? Colors.ocean;
   const threatColor = IUCN_THREAT_COLORS[creature.conservationStatus];
@@ -32,14 +43,19 @@ export function CreatureCard({ creature, compact = false, spotted = false }: Pro
             <Image source={{ uri: creature.wikiImageUrl }} style={styles.gridImage} />
           ) : (
             <Text style={creature.emoji ? styles.gridEmoji : [styles.gridLetter, { color: catColor }]}>
-              {creature.emoji ?? creature.commonName[0]}
+              {creature.emoji ?? name[0]}
             </Text>
           )}
           {spotted && <SpottedBadge />}
         </View>
         <View style={styles.gridInfo}>
-          <Text style={styles.gridName} numberOfLines={2}>{creature.commonName}</Text>
+          <Text style={styles.gridName} numberOfLines={2}>{name}</Text>
           <View style={styles.row}>
+            {creature.rarity && creature.rarity !== 'common' && (
+              <Text style={[styles.rarityDot, { color: RARITY_COLOR[creature.rarity] }]}>
+                {'★'}
+              </Text>
+            )}
             <DifficultyDots value={creature.spottingDifficulty} />
             {threatColor ? (
               <Text style={[styles.iucnText, { color: threatColor }]}>
@@ -59,14 +75,17 @@ export function CreatureCard({ creature, compact = false, spotted = false }: Pro
           <Image source={{ uri: creature.wikiImageUrl }} style={styles.listImage} />
         ) : (
           <Text style={creature.emoji ? styles.listEmoji : [styles.listLetter, { color: catColor }]}>
-            {creature.emoji ?? creature.commonName[0]}
+            {creature.emoji ?? name[0]}
           </Text>
         )}
         {spotted && <SpottedBadge />}
       </View>
       <View style={styles.listInfo}>
         <View style={styles.row}>
-          <Text style={styles.listName} numberOfLines={1}>{creature.commonName}</Text>
+          <Text style={styles.listName} numberOfLines={1}>{name}</Text>
+          {creature.rarity && creature.rarity !== 'common' && (
+            <Text style={[styles.rarityDot, { color: RARITY_COLOR[creature.rarity] }]}>★</Text>
+          )}
           {threatColor ? (
             <Text style={[styles.iucnText, { color: threatColor }]}>
               {creature.conservationStatus}
@@ -220,6 +239,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  rarityDot: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   catLabel: {
     fontSize: 11,

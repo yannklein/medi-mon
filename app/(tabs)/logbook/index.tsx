@@ -12,9 +12,11 @@ import * as Haptics from 'expo-haptics';
 import { useLogbookStore } from '@/stores/logbookStore';
 import { DiveCard } from '@/components/logbook/DiveCard';
 import { Colors, BorderRadius, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 import type { DiveRecord } from '@/types/dive';
 
 export default function LogbookScreen() {
+  const t = useT();
   const dives = useLogbookStore((s) => s.dives);
   const getSightingsForDive = useLogbookStore((s) => s.getSightingsForDive);
 
@@ -31,12 +33,15 @@ export default function LogbookScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Logbook</Text>
-          <Text style={styles.subtitle}>{dives.length} dive{dives.length !== 1 ? 's' : ''} recorded</Text>
+        <View style={styles.headerTop}>
+          <View style={styles.iconCircle}>
+            <Text style={styles.iconEmoji}>📓</Text>
+          </View>
+          <Text style={styles.title}>{t('logbook.title')}</Text>
+          <Text style={styles.subtitle}>{t('logbook.subtitle', dives.length)}</Text>
         </View>
         <Pressable style={styles.addBtn} onPress={handleLogDive}>
-          <Text style={styles.addBtnText}>+ Log Dive</Text>
+          <Text style={styles.addBtnText}>{t('logbook.logDive')}</Text>
         </Pressable>
       </View>
 
@@ -53,10 +58,10 @@ export default function LogbookScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>🤿</Text>
-            <Text style={styles.emptyTitle}>No dives yet</Text>
-            <Text style={styles.emptySubtitle}>Log your first dive to get started.</Text>
+            <Text style={styles.emptyTitle}>{t('logbook.empty.title')}</Text>
+            <Text style={styles.emptySubtitle}>{t('logbook.empty.subtitle')}</Text>
             <Pressable style={styles.emptyBtn} onPress={handleLogDive}>
-              <Text style={styles.emptyBtnText}>Log a Dive</Text>
+              <Text style={styles.emptyBtnText}>{t('logbook.empty.btn')}</Text>
             </Pressable>
           </View>
         }
@@ -75,16 +80,32 @@ export default function LogbookScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.navy },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.md,
+    gap: Spacing.xs,
   },
+  headerTop: {
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: Spacing.sm,
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.navyLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    borderWidth: 2,
+    borderColor: Colors.ocean,
+  },
+  iconEmoji: { fontSize: 30 },
   title: {
     color: Colors.textPrimary,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
   },
   subtitle: {
